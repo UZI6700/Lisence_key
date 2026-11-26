@@ -1,0 +1,22 @@
+kind: wasmer.io/App.v0
+name: license-manager
+# TODO: replace with your Wasmer account username/namespace
+owner: your-wasmer-username
+package: .
+
+# Supabase Auth and Supabase PostgreSQL are external services. Set the
+# SUPABASE_* and LICENSE_* values as Wasmer app secrets (see docs/SUPABASE.md).
+env:
+  NODE_ENV: production
+
+# HTTPS is terminated automatically by Wasmer (redirect.force_https defaults to true).
+health_checks:
+  - http:
+      method: get
+      path: /health
+      interval: 60s
+      timeout: 10s
+      unhealthy_threshold: 3
+      healthy_threshold: 1
+      expected_status_codes:
+        - 200

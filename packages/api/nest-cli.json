@@ -1,0 +1,7 @@
+{
+  "collection": "@nestjs/cli",
+  "root": "packages/api",
+  "sourceRoot": "packages/api/src",
+  "migrationsRoot": "packages/api/prisma/migrations",
+  "db": "postgresql"
+}

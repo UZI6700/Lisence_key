@@ -1,0 +1,31 @@
+{
+  "name": "license-management-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "License management system — NestJS API + React dashboard, deployable on Wasmer Edge with managed PostgreSQL",
+  "workspaces": [
+    "packages/api",
+    "packages/web",
+    "packages/license-client"
+  ],
+  "scripts": {
+    "build:prod": "npm run prisma:generate --workspace api && npm run build --workspace api && npm run build --workspace license-management-web && npm run build --workspace @lms/license-client && node scripts/copy-web.js && node scripts/bundle-api.js",
+    "start": "node packages/api/dist/main.js",
+    "deploy": "wasmer deploy --build-remote",
+    "setup": "npm run db:setup --workspace api",
+    "test:licensing": "npm run test --workspace @lms/license-client"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "dependencies": {
+    "@neon/config": "^1.14.7",
+    "@neon/env": "^2.1.10",
+    "@nestjs/common": "^12.6.1",
+    "@nestjs/core": "^12.6.1",
+    "@nestjs/platform-express": "^12.6.1",
+    "express": "^5.3.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  }
+}
