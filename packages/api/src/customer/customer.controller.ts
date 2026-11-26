@@ -7,10 +7,8 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { CustomerService } from './customer.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 export interface CreateCustomerDto {
   name: string;
@@ -33,7 +31,6 @@ function parseOptionalBoolean(value?: string): boolean | undefined {
   return undefined;
 }
 
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}

@@ -7,10 +7,8 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { SubscriptionService } from './subscription.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 /** ISO-8601 date strings are accepted directly by Prisma DateTime fields. */
 export interface CreateSubscriptionDto {
@@ -30,7 +28,6 @@ export interface CreateSubscriptionDto {
 
 export type UpdateSubscriptionDto = Partial<CreateSubscriptionDto>;
 
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/subscriptions')
 export class SubscriptionController {
   constructor(private readonly subscriptionService: SubscriptionService) {}

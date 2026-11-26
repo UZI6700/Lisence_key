@@ -7,9 +7,8 @@ import { SettingsService } from './settings.service';
 export class SettingsController {
   constructor(private settingsService: SettingsService) {}
 
-  /** Authenticated settings view used by the admin dashboard. */
+  /** Settings view for the dashboard. */
   @Get()
-  @UseGuards(JwtAuthGuard)
   get() {
     return this.settingsService.get();
   }

@@ -1,9 +1,7 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { NeonService } from './neon.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 /** Read-only diagnostics and Neon service proxies for the admin dashboard. */
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/neon')
 export class NeonController {
   constructor(private readonly neon: NeonService) {}

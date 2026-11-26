@@ -6,10 +6,8 @@ import {
   Param,
   Patch,
   Post,
-  UseGuards,
 } from '@nestjs/common';
 import { ApiKeyService } from './api-key.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 export interface CreateApiKeyDto {
   name: string;
@@ -24,7 +22,6 @@ export type UpdateApiKeyDto = Partial<CreateApiKeyDto> & {
   usageCount?: number;
 };
 
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/api-keys')
 export class ApiKeyController {
   constructor(private readonly apiKeyService: ApiKeyService) {}

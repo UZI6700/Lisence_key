@@ -7,10 +7,8 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { ProductService } from './product.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 export interface CreateProductDto {
   name: string;
@@ -29,7 +27,6 @@ function parseOptionalBoolean(value?: string): boolean | undefined {
   return undefined;
 }
 
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/products')
 export class ProductController {
   constructor(private readonly productService: ProductService) {}

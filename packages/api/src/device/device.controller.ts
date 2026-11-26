@@ -7,10 +7,8 @@ import {
   Patch,
   Post,
   Query,
-  UseGuards,
 } from '@nestjs/common';
 import { DeviceService } from './device.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 /** ISO-8601 date strings are accepted directly by Prisma DateTime fields. */
 export interface CreateDeviceDto {
@@ -29,7 +27,6 @@ export interface CreateDeviceDto {
 
 export type UpdateDeviceDto = Partial<CreateDeviceDto>;
 
-@UseGuards(JwtAuthGuard)
 @Controller('api/v1/devices')
 export class DeviceController {
   constructor(private readonly deviceService: DeviceService) {}
