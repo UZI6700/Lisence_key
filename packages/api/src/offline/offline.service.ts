@@ -19,6 +19,8 @@ const CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
 export interface ActivateOfflineDto {
   licenseKey: string;
   deviceFingerprint?: string;
+  deviceId?: string;
+  fingerprint?: string;
   requestCode?: string;
   productId?: string;
   productCode?: string;
@@ -34,6 +36,8 @@ export interface ActivateOfflineDto {
 export interface ValidateOfflineDto {
   licenseKey: string;
   deviceFingerprint?: string;
+  deviceId?: string;
+  fingerprint?: string;
   requestCode?: string;
   productId?: string;
   productCode?: string;
@@ -150,8 +154,12 @@ export class OfflineService {
     await this.recordValidation(license.id, fingerprint, 'VALID', 'Activated', now, dto.clientTime);
 
     const licenseFile = await this.buildLicenseFile(updated, fingerprint, now, dto, dto.clockSequence ?? 1);
+    const posDeviceId = dto.deviceId || dto.fingerprint || fingerprint;
     return {
       activated: true,
+      valid: true,                       // POS app checks valid === false
+      licenseKey: this.buildPosToken(updated, posDeviceId, expiresAt),  // POS findToken()
+      token: this.buildPosToken(updated, posDeviceId, expiresAt),
       licenseFile,
       license: this.serialize(updated),
       device: { id: device.id, fingerprint: device.fingerprint, status: device.status },
@@ -202,6 +210,7 @@ export class OfflineService {
       await this.recordValidation(license.id, fingerprint || null, 'VALID', 'Online validation', serverTime, dto.clientTime);
 
       const clockSkewDetected = this.isClockSuspicious(dto.clientTime, serverTime);
+      const posDeviceId = dto.deviceId || dto.fingerprint || fingerprint;
       const licenseFile = dto.refresh === false
         ? undefined
         : await this.buildLicenseFile(
@@ -216,6 +225,9 @@ export class OfflineService {
         valid: true,
         code: 'VALID',
         reason: 'License is valid',
+        licenseKey: this.buildPosToken(license, posDeviceId, new Date(license.expiresAt)),
+        token: this.buildPosToken(license, posDeviceId, new Date(license.expiresAt)),
+        expiresAt: new Date(license.expiresAt).toISOString(),
         licenseFile,
         license: this.serialize({ ...license, lastValidationAt: serverTime }),
         serverTime: serverTime.toISOString(),
@@ -283,7 +295,8 @@ export class OfflineService {
   // ----------------------------------------------------------------
 
   private async lookup(key: string) {
-    const normalized = key.toUpperCase().startsWith('DIG-') ? key.toUpperCase() : key;
+    const resolved = this.resolvePosKey(key);
+    const normalized = resolved.toUpperCase().startsWith('DIG-') ? resolved.toUpperCase() : resolved;
     let license = await this.prisma.license.findFirst({
       where: { OR: [{ licenseKey: normalized }, { signaturePayload: key }] },
       include: { product: true, customer: true },
@@ -316,10 +329,10 @@ export class OfflineService {
     // Product identity: checked against BOTH the signed token and the database.
     const signedProductId = verification.payload?.productId;
     const signedProductCode = verification.payload?.productCode;
-    if (dto.productId && dto.productId !== license.productId) {
+    if (dto.productId && dto.productId !== license.productId && dto.productId !== 'plywoods-pos') {
       throw this.fail('PRODUCT_MISMATCH', 'License is not valid for this product', new BadRequestException('Product ID does not match this license'));
     }
-    if (dto.productCode && dto.productCode !== license.product?.code) {
+    if (dto.productCode && dto.productCode !== license.product?.code && dto.productCode !== 'plywoods-pos') {
       throw this.fail('PRODUCT_MISMATCH', 'License is not valid for this product', new BadRequestException('Product code does not match this license'));
     }
     if (signedProductId && signedProductId !== license.productId) {
@@ -347,6 +360,9 @@ export class OfflineService {
 
   private resolveFingerprint(dto: ActivateOfflineDto | ValidateOfflineDto, payload?: LicensePayload): string {
     if (dto.deviceFingerprint) return this.normalizeFingerprint(dto.deviceFingerprint);
+    // PLY Woods POS sends a persistent device UUID as `deviceId`/`fingerprint`.
+    if (dto.deviceId) return this.normalizeFingerprint(dto.deviceId);
+    if (dto.fingerprint) return this.normalizeFingerprint(dto.fingerprint);
     if (dto.requestCode) {
       try {
         const decoded = this.crypto.decodeRequestCode(dto.requestCode);
@@ -370,6 +386,37 @@ export class OfflineService {
     const client = new Date(clientTime).getTime();
     if (!Number.isFinite(client)) return true;
     return Math.abs(client - serverTime.getTime()) > CLOCK_TOLERANCE_MS;
+  }
+
+  /** Build a token in the exact format the PLY Woods POS desktop app verifies. */
+  private buildPosToken(license: any, posDeviceId: string, expiresAt: Date): string {
+    return this.crypto.issuePosToken({
+      v: 1,
+      licenseId: license.id,
+      licenseKey: license.licenseKey,
+      productId: 'plywoods-pos',
+      deviceId: posDeviceId,
+      activationId: license.id,
+      customer: license.customer?.name || '',
+      plan: license.plan || 'standard',
+      status: license.status === 'REVOKED' ? 'revoked' : license.status === 'SUSPENDED' ? 'suspended' : 'active',
+      expiresAt: new Date(expiresAt).toISOString(),
+      issuedAt: new Date(license.issuedAt).toISOString(),
+      keyId: 'dig-cloud',
+      maxDevices: license.maxDevices,
+    });
+  }
+
+  /** Resolve a license key that may be a POS token carrying the DIG key. */
+  private resolvePosKey(key: string): string {
+    const clean = String(key || '').trim();
+    if (!clean.includes('.')) return clean;
+    try {
+      const payloadPart = clean.split('.')[0];
+      const decoded = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+      if (typeof decoded.licenseKey === 'string') return decoded.licenseKey.toUpperCase();
+    } catch { /* fall through */ }
+    return clean;
   }
 
   private async buildLicenseFile(

@@ -238,6 +238,16 @@ export class CryptoService {
     };
   }
 
+  /**
+   * POS-compatible token: base64url(JSON).base64url(Ed25519 signature over the
+   * base64url STRING bytes). The PLY Woods POS app verifies signatures this way.
+   */
+  issuePosToken(payload: Record<string, unknown>): string {
+    const payloadPart = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+    const signature = sign(null, Buffer.from(payloadPart, 'utf8'), this.getPrivateKey()).toString('base64url');
+    return `${payloadPart}.${signature}`;
+  }
+
   /** Raw Ed25519 signature over arbitrary bytes, base64url encoded. */
   signData(data: Buffer | string): string {
     const bytes = typeof data === 'string' ? Buffer.from(data, 'utf8') : data;
