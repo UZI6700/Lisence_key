@@ -510,15 +510,15 @@ function Licenses() {
 // Products
 // ------------------------------------------------------------------
 function Products() {
-  const { data, loading, error } = useApi(() => Promise.all([productsApi.list(), productsApi.plans()]), [])
-  if (loading) return <Loading />
-  if (error) return <ErrorBox message={error} />
-  const [listProducts, setListProducts] = useState<any[]>(data![0])
-  const [listPlans] = useState<any[]>(data![1])
+  const { data, loading, error, reload } = useApi(() => Promise.all([productsApi.list(), productsApi.plans()]), [])
   const [showAdd, setShowAdd] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [form, setForm] = useState({ name: '', code: '', version: '1.0.0', description: '', defaultDeviceLimit: '3' })
+
+  if (loading) return <Loading />
+  if (error) return <ErrorBox message={error} />
+  const [listProducts, listPlans] = data!
 
   const addProduct = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -532,10 +532,9 @@ function Products() {
         description: form.description.trim() || undefined,
         defaultDeviceLimit: parseInt(form.defaultDeviceLimit, 10) || 3,
       })
-      const fresh = await Promise.all([productsApi.list(), productsApi.plans()])
-      setListProducts(fresh[0])
       setShowAdd(false)
       setForm({ name: '', code: '', version: '1.0.0', description: '', defaultDeviceLimit: '3' })
+      reload()
     } catch (e: any) {
       setErr(e?.message || 'Failed to create product')
     } finally {
