@@ -91,9 +91,42 @@ const StatCard = ({ label, value, change, icon: Icon, color, positive }: {
   </div>
 )
 
+// Skeleton loading placeholder — mirrors the dashboard layout
+const SkeletonLine = ({ w = 'w-full', h = 'h-4' }: { w?: string; h?: string }) => (
+  <div className={`skeleton ${w} ${h}`} />
+)
+
 const Loading = () => (
-  <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
-    <Loader2 size={20} className="animate-spin mr-2" /> Loading data…
+  <div className="space-y-5 animate-pulse">
+    {/* stat cards */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="card p-5 space-y-3">
+          <SkeletonLine w="w-1/2" h="h-3" />
+          <SkeletonLine w="w-2/3" h="h-8" />
+          <SkeletonLine w="w-1/3" h="h-3" />
+        </div>
+      ))}
+    </div>
+    {/* main content */}
+    <div className="card p-6 space-y-5">
+      <div className="flex items-center justify-between">
+        <SkeletonLine w="w-1/4" h="h-6" />
+        <SkeletonLine w="w-28" h="h-9" />
+      </div>
+      <SkeletonLine w="w-full" h="h-10" />
+      <div className="space-y-3 pt-2">
+        {[1, 2, 3, 4, 5, 6].map(i => (
+          <div key={i} className="flex items-center gap-4 py-2">
+            <SkeletonLine w="w-8" h="h-8" />
+            <SkeletonLine w="w-1/4" h="h-4" />
+            <SkeletonLine w="w-1/5" h="h-4" />
+            <SkeletonLine w="w-1/6" h="h-4" />
+            <SkeletonLine w="w-16" h="h-6" />
+          </div>
+        ))}
+      </div>
+    </div>
   </div>
 )
 const ErrorBox = ({ message }: { message: string }) => (

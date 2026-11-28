@@ -2,10 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 const DAY = 86_400_000;
+const CACHE_TTL_MS = 10_000; // 10 seconds — dashboard refreshes are frequent
 
 @Injectable()
 export class StatsService {
   constructor(private prisma: PrismaService) {}
+  private cache: { data: any; at: number } | null = null;
 
   private pctChange(current: number, previous: number): number {
     if (previous === 0) return current > 0 ? 100 : 0;
@@ -14,6 +16,15 @@ export class StatsService {
 
   async dashboard() {
     const now = Date.now();
+    if (this.cache && now - this.cache.at < CACHE_TTL_MS) {
+      return this.cache.data;
+    }
+    const result = await this.buildDashboard(now);
+    this.cache = { data: result, at: Date.now() };
+    return result;
+  }
+
+  private async buildDashboard(now: number) {
     const weekAgo = new Date(now - 7 * DAY);
     const fortnightAgo = new Date(now - 14 * DAY);
 
@@ -58,21 +69,25 @@ export class StatsService {
       }),
     ]);
 
-    // Real 7-day trend from issued licenses and recorded activations
-    const trend: { name: string; activated: number; renewed: number }[] = [];
-    for (let i = 6; i >= 0; i -= 1) {
-      const start = new Date(now - (i + 1) * DAY);
-      const end = new Date(now - i * DAY);
-      const [issued, activated] = await Promise.all([
-        this.prisma.license.count({ where: { createdAt: { gte: start, lt: end } } }),
-        this.prisma.licenseActivation.count({ where: { activatedAt: { gte: start, lt: end }, success: true } }),
-      ]);
-      trend.push({
-        name: start.toLocaleDateString(undefined, { weekday: 'short' }),
-        activated: issued,
-        renewed: activated,
-      });
-    }
+    // Real 7-day trend from issued licenses and recorded activations.
+    // Compute all days in parallel instead of awaiting each day sequentially.
+    const trendResults = await Promise.all(
+      Array.from({ length: 7 }, async (_, idx) => {
+        const i = 6 - idx;
+        const start = new Date(now - (i + 1) * DAY);
+        const end = new Date(now - i * DAY);
+        const [issued, activated] = await Promise.all([
+          this.prisma.license.count({ where: { createdAt: { gte: start, lt: end } } }),
+          this.prisma.licenseActivation.count({ where: { activatedAt: { gte: start, lt: end }, success: true } }),
+        ]);
+        return {
+          name: start.toLocaleDateString(undefined, { weekday: 'short' }),
+          activated: issued,
+          renewed: activated,
+        };
+      }),
+    );
+    const trend = trendResults;
 
     const revenue = activeSubscriptionsWithPlans.reduce((sum, s) => sum + (s.subscriptionPlan?.price || 0), 0);
 
