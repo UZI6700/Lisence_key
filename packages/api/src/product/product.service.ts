@@ -56,7 +56,20 @@ export class ProductService {
 
   async remove(id: string) {
     await this.ensureExists(id);
-    await this.prisma.product.delete({ where: { id } });
+    // Subscriptions and licenses reference products with RESTRICT FKs.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.subscription.deleteMany({ where: { productId: id } });
+      // Licenses tied to this product: remove their child rows first.
+      const licenses = await tx.license.findMany({ where: { productId: id }, select: { id: true } });
+      for (const l of licenses) {
+        await tx.licenseActivation.deleteMany({ where: { licenseId: l.id } });
+        await tx.licenseRenewal.deleteMany({ where: { licenseId: l.id } });
+        await tx.licenseValidation.deleteMany({ where: { licenseId: l.id } });
+        await tx.device.updateMany({ where: { licenseId: l.id }, data: { licenseId: null, status: 'SUSPENDED' } });
+      }
+      await tx.license.deleteMany({ where: { productId: id } });
+      await tx.product.delete({ where: { id } });
+    });
     return { deleted: true, id };
   }
 

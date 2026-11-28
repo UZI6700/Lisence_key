@@ -49,7 +49,18 @@ export class CustomerService {
 
   async remove(id: string) {
     await this.ensureExists(id);
-    await this.prisma.customer.delete({ where: { id } });
+    // Licenses reference customers with RESTRICT FKs — unlink + delete first.
+    await this.prisma.$transaction(async (tx) => {
+      const licenses = await tx.license.findMany({ where: { customerId: id }, select: { id: true } });
+      for (const l of licenses) {
+        await tx.licenseActivation.deleteMany({ where: { licenseId: l.id } });
+        await tx.licenseRenewal.deleteMany({ where: { licenseId: l.id } });
+        await tx.licenseValidation.deleteMany({ where: { licenseId: l.id } });
+        await tx.device.updateMany({ where: { licenseId: l.id }, data: { licenseId: null, status: 'SUSPENDED' } });
+      }
+      await tx.license.deleteMany({ where: { customerId: id } });
+      await tx.customer.delete({ where: { id } });
+    });
     return { deleted: true, id };
   }
 

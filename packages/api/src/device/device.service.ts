@@ -52,7 +52,11 @@ export class DeviceService {
 
   async remove(id: string) {
     await this.ensureExists(id);
-    await this.prisma.device.delete({ where: { id } });
+    // Activations reference devices with RESTRICT — remove them first.
+    await this.prisma.$transaction([
+      this.prisma.licenseActivation.deleteMany({ where: { deviceId: id } }),
+      this.prisma.device.delete({ where: { id } }),
+    ]);
     return { deleted: true, id };
   }
 

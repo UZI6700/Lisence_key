@@ -493,7 +493,17 @@ export class LicenseService {
   async remove(id: string) {
     const license = await this.prisma.license.findUnique({ where: { id } });
     if (!license) throw new NotFoundException('License not found');
-    await this.prisma.license.delete({ where: { id } });
+
+    // Child records with RESTRICT foreign keys must be removed first.
+    // LicenseValidation already cascades; activations, renewals and device
+    // bindings do not, so clean them up explicitly.
+    await this.prisma.$transaction([
+      this.prisma.licenseActivation.deleteMany({ where: { licenseId: id } }),
+      this.prisma.licenseRenewal.deleteMany({ where: { licenseId: id } }),
+      this.prisma.device.updateMany({ where: { licenseId: id }, data: { licenseId: null, status: 'SUSPENDED' } }),
+      this.prisma.licenseValidation.deleteMany({ where: { licenseId: id } }),
+      this.prisma.license.delete({ where: { id } }),
+    ]);
     return { deleted: true, id };
   }
 
