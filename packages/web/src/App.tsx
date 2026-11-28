@@ -616,6 +616,7 @@ function Licenses() {
                           <button title="Revoke" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => act(() => licensesApi.revoke(l.id))}>Revoke</button>
                         )}
                         <button title="Renew license" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200" onClick={() => setRenewLicense(l)}>Renew</button>
+                        <button title="Delete license" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => act(() => { if (!window.confirm(`Delete license ${l.licenseKey}? This cannot be undone.`)) return Promise.reject(new Error('cancelled')); return licensesApi.remove(l.id) })}>Delete</button>
                       </div>
                     </td>
                   </tr>
@@ -675,6 +676,11 @@ function Products() {
     }
   }
 
+  const removeProduct = async (p: any) => {
+    if (!window.confirm(`Delete product "${p.name}"? This cannot be undone.`)) return
+    try { await productsApi.remove(p.id); reload() } catch (e: any) { setErr(e?.message || 'Delete failed') }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -725,7 +731,10 @@ function Products() {
             <p className="text-xs text-slate-500 mt-2">{p.description || 'No description'}</p>
             <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
               <span>Max devices: <b className="text-slate-800">{p.defaultDeviceLimit}</b></span>
-              <span>Added {fmtDate(p.createdAt)}</span>
+              <div className="flex items-center gap-3">
+                <span>Added {fmtDate(p.createdAt)}</span>
+                <button title="Delete product" className="px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => removeProduct(p)}>Delete</button>
+              </div>
             </div>
           </div>
         ))}
@@ -751,7 +760,11 @@ function Products() {
 // Customers
 // ------------------------------------------------------------------
 function Customers() {
-  const { data, loading, error } = useApi(() => customersApi.list(), [])
+  const { data, loading, error, reload } = useApi(() => customersApi.list(), [])
+  const removeCustomer = async (c: any) => {
+    if (!window.confirm(`Delete customer "${c.name}"? This cannot be undone.`)) return
+    try { await customersApi.remove(c.id); reload() } catch (e: any) { window.alert(e?.message || 'Delete failed') }
+  }
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
 
@@ -764,7 +777,7 @@ function Customers() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="bg-slate-50 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              <th className="px-5 py-3">Customer</th><th className="px-5 py-3">Email</th><th className="px-5 py-3">Phone</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Joined</th>
+              <th className="px-5 py-3">Customer</th><th className="px-5 py-3">Email</th><th className="px-5 py-3">Phone</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Joined</th><th className="px-5 py-3">Action</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {data!.map(c => (
@@ -774,6 +787,7 @@ function Customers() {
                   <td className="px-5 py-3 text-slate-500">{c.phone || '—'}</td>
                   <td className="px-5 py-3"><Badge status={c.isActive ? 'Active' : 'Inactive'} /></td>
                   <td className="px-5 py-3 text-slate-500">{fmtDate(c.createdAt)}</td>
+                  <td className="px-5 py-3"><button className="text-xs px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => removeCustomer(c)}>Delete</button></td>
                 </tr>
               ))}
             </tbody>
@@ -789,7 +803,11 @@ function Customers() {
 // Subscriptions
 // ------------------------------------------------------------------
 function Subscriptions() {
-  const { data, loading, error } = useApi(() => Promise.all([subscriptionsApi.list(), productsApi.plans()]), [])
+  const { data, loading, error, reload } = useApi(() => Promise.all([subscriptionsApi.list(), productsApi.plans()]), [])
+  const removeSubscription = async (s: any) => {
+    if (!window.confirm(`Delete subscription for ${s.product?.name || s.id}? This cannot be undone.`)) return
+    try { await subscriptionsApi.remove(s.id); reload() } catch (e: any) { window.alert(e?.message || 'Delete failed') }
+  }
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
   const [subscriptions, plans] = data!
@@ -823,7 +841,10 @@ function Subscriptions() {
           {subscriptions.slice(0, 6).map(s => (
             <div key={s.id} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
               <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><CreditCard size={16} /></div><div><p className="text-sm font-medium text-slate-800">{s.product?.name}</p><p className="text-xs text-slate-500">{s.subscriptionPlan?.name} plan · expires {fmtDate(s.expiryDate)}</p></div></div>
-              <Badge status={s.status} />
+              <div className="flex items-center gap-3">
+                <Badge status={s.status} />
+                <button title="Delete subscription" className="text-xs px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => removeSubscription(s)}>Delete</button>
+              </div>
             </div>
           ))}
           {subscriptions.length === 0 && <p className="text-center py-6 text-slate-400 text-sm">No subscriptions found</p>}

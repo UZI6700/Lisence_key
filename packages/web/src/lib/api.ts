@@ -141,6 +141,7 @@ export const customersApi = {
 export const subscriptionsApi = {
   list: () => api.get<any[]>('/subscriptions'),
   create: (body: any) => api.post<any>('/subscriptions', body),
+  remove: (id: string) => api.delete<any>(`/subscriptions/${id}`),
 }
 
 export const devicesApi = {
