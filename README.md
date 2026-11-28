@@ -1,20 +1,20 @@
 # License Management System
 
-Full-stack license management platform: **NestJS** API + **React/TypeScript** admin dashboard, backed by **Supabase PostgreSQL** with **Supabase Auth**, deployable to **Wasmer Edge**. See [DEPLOY.md](DEPLOY.md) and [docs/SUPABASE.md](docs/SUPABASE.md) for setup and deployment.
+Full-stack license management platform: **NestJS** API + **React/TypeScript** admin dashboard, backed by **Neon PostgreSQL** with **Neon Auth**, deployable to **Vercel**. See [VERCEL.md](VERCEL.md) and [docs/NEON.md](docs/NEON.md) for setup and deployment.
 
 ## Features
 
-- 🔐 **Supabase Auth** access/refresh tokens verified against JWKS; legacy JWT + argon2id fallback when Supabase is not configured
+- 🔐 **Neon Auth** access tokens verified against JWKS; argon2id password hashing for local accounts
 - 🔑 **Ed25519 license tokens** — signed, tamper-proof, base64url encoded
 - 📱 **Device activation** with fingerprinting, device limits, and audit trail
 - ⏳ **Configurable offline grace period** (disabled / 3 / 7 / custom days) that never extends expiry
 - 📊 **Admin dashboard** with 8 pages (Dashboard, Licenses, Products, Customers, Subscriptions, Devices, Activity Log, Settings)
 - 🗄️ **Prisma ORM** (13 tables) with a pure-JS `pg` driver adapter — no native database binaries in WebAssembly
 - 🌐 **REST API** with full CRUD for all entities
-- ☁️ **Wasmer Edge ready**: `app.yaml` + `Anybuild`, health checks, automatic HTTPS, external Supabase database
+- ☁️ **Vercel ready**: serverless function wrapper, health checks, automatic HTTPS, Neon database
 - 📴 **Online + offline licensing**: automatic signed `license.lic`, Ed25519 verification, device binding, offline grace, clock-rollback detection and online synchronization
 
-**Documentation:** [Neon integration](docs/NEON.md) · [Vercel deployment](VERCEL.md) · [Supabase setup](docs/SUPABASE.md) · [Wasmer deployment](DEPLOY.md) · [Offline license API](docs/OFFLINE_LICENSE_API.md) · [Testing instructions](docs/OFFLINE_TESTING.md) · [Desktop client library](packages/license-client/README.md)
+**Documentation:** [Neon integration](docs/NEON.md) · [Vercel deployment](VERCEL.md) · [Wasmer deployment](DEPLOY.md) · [Offline license API](docs/OFFLINE_LICENSE_API.md) · [Testing instructions](docs/OFFLINE_TESTING.md) · [Desktop client library](packages/license-client/README.md)
 
 ---
 
@@ -153,33 +153,32 @@ Create `packages/api/.env`:
 
 ```env
 PORT=3000
-SUPABASE_URL="https://<project-ref>.supabase.co"
-SUPABASE_PUBLISHABLE_KEY="sb_publishable_..."
-SUPABASE_SECRET_KEY="sb_secret_..."
-SUPABASE_JWKS_URL="https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json"
-SUPABASE_DB_URL="postgresql://postgres:[DB_PASSWORD]@db.<project-ref>.supabase.co:5432/postgres"
+DATABASE_URL="postgresql://...@...aws.neon.tech/...?sslmode=require"
+DATABASE_URL_UNPOOLED="postgresql://...@...aws.neon.tech/..."
+NEON_AUTH_BASE_URL="https://...auth.neon.tech"
+NEON_AUTH_JWKS_URL="https://...auth.neon.tech/.well-known/jwks.json"
+NEON_FUNCTION_HOST_SUFFIX="..."
+NEON_AI_GATEWAY_BASE_URL="https://...neon.tech/v1"
+NEON_AI_GATEWAY_TOKEN="..."
+NEON_REALTIME_URL="wss://...neon.tech"
+NEON_REALTIME_SECRET="..."
+JWT_SECRET="..."
+JWT_REFRESH_SECRET="..."
 LICENSE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 LICENSE_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----"
 ```
 
-`DATABASE_URL` (or Wasmer's injected `DB_*` variables) is a fallback when `SUPABASE_DB_URL` is unset.
-`LICENSE_*` and `SUPABASE_*` secret values are set as
-[Wasmer secrets](DEPLOY.md#4-set-secrets). See [docs/SUPABASE.md](docs/SUPABASE.md) for role mapping and admin bootstrap.
+Secrets are pushed to Vercel with `vercel env add`. See `VERCEL.md` and `docs/NEON.md`.
 
 ---
 
-## Deploying to Wasmer Edge
+## Deploying to Vercel
 
-See **[DEPLOY.md](DEPLOY.md)** for the complete walkthrough. In short:
+See **[VERCEL.md](VERCEL.md)** for the complete walkthrough. In short:
 
 ```bash
-# edit app.yaml: set owner + name, then set Supabase/License secrets
-wasmer login
-SUPABASE_DB_URL='postgresql://postgres:[DB_PASSWORD]@db.<ref>.supabase.co:5432/postgres' \
-  node scripts/apply-migration.js
-SUPABASE_DB_URL='postgresql://postgres:[DB_PASSWORD]@db.<ref>.supabase.co:5432/postgres' \
-  ADMIN_EMAIL=you@yourcompany.com ADMIN_PASSWORD='...' npm run setup --workspace api
-wasmer deploy --build-remote
+npm run build:prod
+vercel deploy --prod --yes
 ```
 
 ---
@@ -189,8 +188,8 @@ wasmer deploy --build-remote
 ```
 packages/
   api/src/
-    auth/         Supabase-backed auth controller/service, legacy JWT fallback, guards
-    supabase/     @supabase/server clients, JWKS verification, identity mirroring
+    auth/         Neon Auth controller/service, JWT guard, guards
+    neon/         Neon Auth, Functions, AI Gateway, Realtime integration
     crypto/       Ed25519 signing, verification, device request codes
     license/      Issue / activate / validate / renew / revoke logic
     product/      Products + subscription plans
@@ -202,7 +201,7 @@ packages/
     stats/        Dashboard aggregates
     settings/     Public key + configuration
     prisma/       PostgreSQL pool + PrismaService (pg driver adapter)
-    health/       /health endpoint for Wasmer health checks
+    health/       /health endpoint
   api/prisma/
     schema.prisma 13 models (PostgreSQL)
     migrations/0001_init, 0002_offline_licensing, 0003_supabase_auth
@@ -211,11 +210,12 @@ packages/
   web/src/
     App.tsx       8-page admin dashboard
     lib/api.ts    Typed API client with token refresh
-Anybuild          Wasmer remote build definition (Node 24)
-app.yaml          Wasmer Edge app + health check (Supabase is external)
-scripts/          Production build, migration and Wasmer helpers
-docs/SUPABASE.md  Supabase Auth + database setup, roles, secrets
-DEPLOY.md         Full Wasmer deployment guide
+api/index.js      Vercel serverless entrypoint (esbuild-bundled NestJS)
+scripts/bundle-api.js  Bundles the API for Vercel's CommonJS runtime
+vercel.json       Vercel build + rewrite config
+docs/NEON.md      Neon Auth + database setup, roles, secrets
+VERCEL.md         Full Vercel deployment guide
+DEPLOY.md         Legacy Wasmer deployment guide
 ```
 
 ---
@@ -225,7 +225,7 @@ DEPLOY.md         Full Wasmer deployment guide
 - [x] `npm run build:prod` (API + web + static copy) — clean
 - [x] Prisma PostgreSQL client generation — clean
 - [x] No native modules in the deployed app (pure-JS pg adapter + argon2id)
-- [x] `POST /auth/login` with a bootstrap admin — JWT returned
+- [x] `POST /auth/neon-login` with a Neon admin — access token returned
 - [x] `POST /licenses/issue` — `DIG-XXXX-XXXX-XXXX` key + signed token created
 - [x] `POST /licenses/validate` — valid response
 - [x] Tampered token — rejected with signature error
