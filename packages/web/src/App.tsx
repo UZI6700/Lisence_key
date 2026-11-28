@@ -803,6 +803,10 @@ function Devices() {
   const act = async (id: string, status: string) => {
     try { await devicesApi.update(id, { status }); reload() } catch (e: any) { setNotice(e.message || 'Action failed') }
   }
+  const remove = async (id: string, fingerprint: string) => {
+    if (!window.confirm(`Delete device ${fingerprint.slice(0, 18)}…? This cannot be undone.`)) return
+    try { await devicesApi.remove(id); reload() } catch (e: any) { setNotice(e.message || 'Delete failed') }
+  }
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
   const active = data!.filter(d => d.status === 'ACTIVE').length
@@ -832,9 +836,12 @@ function Devices() {
                   <td className="px-5 py-3 text-slate-500">{timeAgo(d.lastValidation)}</td>
                   <td className="px-5 py-3"><Badge status={d.status} /></td>
                   <td className="px-5 py-3">
-                    <button className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50" onClick={() => act(d.id, d.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED')}>
-                      {d.status === 'BLOCKED' ? 'Unblock' : 'Block'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50" onClick={() => act(d.id, d.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED')}>
+                        {d.status === 'BLOCKED' ? 'Unblock' : 'Block'}
+                      </button>
+                      <button title="Delete device" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => remove(d.id, d.fingerprint)}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
