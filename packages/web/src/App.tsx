@@ -5,7 +5,7 @@ import {
   Monitor, History, Settings, Search, Bell, ChevronDown,
   Plus, ShieldCheck, Copy, Check, X, Menu, LogOut,
   TrendingUp, TrendingDown, Clock, CircleCheck, CircleX,
-  AlertTriangle, RefreshCw, MoreVertical, LockKeyhole, Loader2, Eye, EyeOff,
+  AlertTriangle, RefreshCw, MoreVertical, LockKeyhole, Loader2, Eye, EyeOff, Trash2,
 } from 'lucide-react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -132,6 +132,34 @@ const Loading = () => (
 const ErrorBox = ({ message }: { message: string }) => (
   <div className="card p-6 text-center text-sm text-red-600">{message}</div>
 )
+
+// Styled confirmation dialog — replaces window.confirm
+function ConfirmDialog({ title, message, confirmLabel = 'Delete', busy, onConfirm, onClose }: {
+  title: string; message: string; confirmLabel?: string; busy?: boolean;
+  onConfirm: () => void; onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] bg-slate-900/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="card w-full max-w-md p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start gap-4">
+          <div className="w-11 h-11 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0"><CircleX size={22} /></div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-slate-900">{title}</h3>
+            <p className="text-sm text-slate-600 mt-2">{message}</p>
+            <p className="text-xs text-slate-400 mt-2">This action cannot be undone.</p>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <button className="btn-secondary" onClick={onClose} disabled={busy}>Cancel</button>
+          <button className="btn-primary bg-red-600 hover:bg-red-700 flex items-center gap-2" onClick={onConfirm} disabled={busy}>
+            {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+            {busy ? 'Deleting…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function useApi<T>(fn: () => Promise<T>, deps: any[] = []) {
   const [data, setData] = useState<T | null>(null)
@@ -549,6 +577,8 @@ function Licenses() {
   const [page, setPage] = useState(1)
   const [showIssue, setShowIssue] = useState(false)
   const [renewLicense, setRenewLicense] = useState<any>(null)
+  const [confirmDelete, setConfirmDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState('')
 
@@ -556,6 +586,19 @@ function Licenses() {
   if (filter !== 'All') params.status = filter.toUpperCase()
   if (query) params.search = query
   const { data, loading, error, reload } = useApi(() => licensesApi.list(params), [page, filter, query])
+
+  const doDelete = async () => {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try {
+      await licensesApi.remove(confirmDelete.id)
+      setConfirmDelete(null)
+      reload()
+    } catch (e: any) {
+      setNotice(e?.message || 'Delete failed')
+      setConfirmDelete(null)
+    } finally { setDeleting(false) }
+  }
 
   const copy = (key: string) => { navigator.clipboard?.writeText(key); setCopied(key); setTimeout(() => setCopied(''), 1500) }
   const act = async (fn: () => Promise<any>) => {
@@ -576,6 +619,7 @@ function Licenses() {
       {notice && <div className="card p-3 text-sm text-red-600 bg-red-50 border-red-100">{notice}</div>}
       {showIssue && <IssueModal onClose={() => setShowIssue(false)} onIssued={() => { setShowIssue(false); reload() }} />}
       {renewLicense && <RenewModal license={renewLicense} onClose={() => setRenewLicense(null)} onRenewed={() => { setRenewLicense(null); reload() }} />}
+      {confirmDelete && <ConfirmDialog title="Delete license" message={`Delete license ${confirmDelete.licenseKey}?`} busy={deleting} onConfirm={doDelete} onClose={() => setConfirmDelete(null)} />}
 
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
@@ -616,7 +660,7 @@ function Licenses() {
                           <button title="Revoke" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => act(() => licensesApi.revoke(l.id))}>Revoke</button>
                         )}
                         <button title="Renew license" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200" onClick={() => setRenewLicense(l)}>Renew</button>
-                        <button title="Delete license" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => act(() => { if (!window.confirm(`Delete license ${l.licenseKey}? This cannot be undone.`)) return Promise.reject(new Error('cancelled')); return licensesApi.remove(l.id) })}>Delete</button>
+                        <button title="Delete license" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => setConfirmDelete(l)}>Delete</button>
                       </div>
                     </td>
                   </tr>
@@ -649,6 +693,8 @@ function Products() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [form, setForm] = useState({ name: '', code: '', version: '1.0.0', description: '', defaultDeviceLimit: '3' })
+  const [confirmDelete, setConfirmDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
 
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
@@ -676,9 +722,12 @@ function Products() {
     }
   }
 
-  const removeProduct = async (p: any) => {
-    if (!window.confirm(`Delete product "${p.name}"? This cannot be undone.`)) return
-    try { await productsApi.remove(p.id); reload() } catch (e: any) { setErr(e?.message || 'Delete failed') }
+  const removeProduct = async () => {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try { await productsApi.remove(confirmDelete.id); setConfirmDelete(null); reload() }
+    catch (e: any) { setErr(e?.message || 'Delete failed'); setConfirmDelete(null) }
+    finally { setDeleting(false) }
   }
 
   return (
@@ -719,6 +768,7 @@ function Products() {
           </form>
         </div>
       )}
+      {confirmDelete && <ConfirmDialog title="Delete product" message={`Delete product "${confirmDelete.name}"?`} busy={deleting} onConfirm={removeProduct} onClose={() => setConfirmDelete(null)} />}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {listProducts.map(p => (
           <div key={p.id} className="card p-5 hover:shadow-card-hover transition-shadow">
@@ -733,7 +783,7 @@ function Products() {
               <span>Max devices: <b className="text-slate-800">{p.defaultDeviceLimit}</b></span>
               <div className="flex items-center gap-3">
                 <span>Added {fmtDate(p.createdAt)}</span>
-                <button title="Delete product" className="px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => removeProduct(p)}>Delete</button>
+                <button title="Delete product" className="px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => setConfirmDelete(p)}>Delete</button>
               </div>
             </div>
           </div>
@@ -761,9 +811,14 @@ function Products() {
 // ------------------------------------------------------------------
 function Customers() {
   const { data, loading, error, reload } = useApi(() => customersApi.list(), [])
-  const removeCustomer = async (c: any) => {
-    if (!window.confirm(`Delete customer "${c.name}"? This cannot be undone.`)) return
-    try { await customersApi.remove(c.id); reload() } catch (e: any) { window.alert(e?.message || 'Delete failed') }
+  const [confirmDelete, setConfirmDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
+  const removeCustomer = async () => {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try { await customersApi.remove(confirmDelete.id); setConfirmDelete(null); reload() }
+    catch (e: any) { window.alert(e?.message || 'Delete failed'); setConfirmDelete(null) }
+    finally { setDeleting(false) }
   }
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
@@ -773,6 +828,7 @@ function Customers() {
       <div className="flex items-center justify-between">
         <div><h2 className="text-xl font-bold text-slate-900">Customers</h2><p className="text-sm text-slate-500 mt-0.5">Businesses and individuals holding licenses</p></div>
       </div>
+      {confirmDelete && <ConfirmDialog title="Delete customer" message={`Delete customer "${confirmDelete.name}"?`} busy={deleting} onConfirm={removeCustomer} onClose={() => setConfirmDelete(null)} />}
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -787,7 +843,7 @@ function Customers() {
                   <td className="px-5 py-3 text-slate-500">{c.phone || '—'}</td>
                   <td className="px-5 py-3"><Badge status={c.isActive ? 'Active' : 'Inactive'} /></td>
                   <td className="px-5 py-3 text-slate-500">{fmtDate(c.createdAt)}</td>
-                  <td className="px-5 py-3"><button className="text-xs px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => removeCustomer(c)}>Delete</button></td>
+                  <td className="px-5 py-3"><button className="text-xs px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => setConfirmDelete(c)}>Delete</button></td>
                 </tr>
               ))}
             </tbody>
@@ -804,9 +860,14 @@ function Customers() {
 // ------------------------------------------------------------------
 function Subscriptions() {
   const { data, loading, error, reload } = useApi(() => Promise.all([subscriptionsApi.list(), productsApi.plans()]), [])
-  const removeSubscription = async (s: any) => {
-    if (!window.confirm(`Delete subscription for ${s.product?.name || s.id}? This cannot be undone.`)) return
-    try { await subscriptionsApi.remove(s.id); reload() } catch (e: any) { window.alert(e?.message || 'Delete failed') }
+  const [confirmDelete, setConfirmDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
+  const removeSubscription = async () => {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try { await subscriptionsApi.remove(confirmDelete.id); setConfirmDelete(null); reload() }
+    catch (e: any) { window.alert(e?.message || 'Delete failed'); setConfirmDelete(null) }
+    finally { setDeleting(false) }
   }
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
@@ -818,6 +879,7 @@ function Subscriptions() {
       <div className="flex items-center justify-between">
         <div><h2 className="text-xl font-bold text-slate-900">Subscriptions</h2><p className="text-sm text-slate-500 mt-0.5">Plans and billing cycles</p></div>
       </div>
+      {confirmDelete && <ConfirmDialog title="Delete subscription" message={`Delete subscription for ${confirmDelete.product?.name || confirmDelete.id}?`} busy={deleting} onConfirm={removeSubscription} onClose={() => setConfirmDelete(null)} />}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
         {plans.map((p, i) => (
           <div key={p.id} className="card overflow-hidden hover:shadow-card-hover transition-shadow">
@@ -843,7 +905,7 @@ function Subscriptions() {
               <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><CreditCard size={16} /></div><div><p className="text-sm font-medium text-slate-800">{s.product?.name}</p><p className="text-xs text-slate-500">{s.subscriptionPlan?.name} plan · expires {fmtDate(s.expiryDate)}</p></div></div>
               <div className="flex items-center gap-3">
                 <Badge status={s.status} />
-                <button title="Delete subscription" className="text-xs px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => removeSubscription(s)}>Delete</button>
+                <button title="Delete subscription" className="text-xs px-2 py-1 rounded border border-slate-200 text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => setConfirmDelete(s)}>Delete</button>
               </div>
             </div>
           ))}
@@ -863,9 +925,14 @@ function Devices() {
   const act = async (id: string, status: string) => {
     try { await devicesApi.update(id, { status }); reload() } catch (e: any) { setNotice(e.message || 'Action failed') }
   }
-  const remove = async (id: string, fingerprint: string) => {
-    if (!window.confirm(`Delete device ${fingerprint.slice(0, 18)}…? This cannot be undone.`)) return
-    try { await devicesApi.remove(id); reload() } catch (e: any) { setNotice(e.message || 'Delete failed') }
+  const [confirmDelete, setConfirmDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
+  const remove = async () => {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try { await devicesApi.remove(confirmDelete.id); setConfirmDelete(null); reload() }
+    catch (e: any) { setNotice(e.message || 'Delete failed'); setConfirmDelete(null) }
+    finally { setDeleting(false) }
   }
   if (loading) return <Loading />
   if (error) return <ErrorBox message={error} />
@@ -876,6 +943,7 @@ function Devices() {
     <div className="space-y-5">
       <div><h2 className="text-xl font-bold text-slate-900">Devices</h2><p className="text-sm text-slate-500 mt-0.5">Registered device fingerprints and activation status</p></div>
       {notice && <div className="card p-3 text-sm text-red-600 bg-red-50 border-red-100">{notice}</div>}
+      {confirmDelete && <ConfirmDialog title="Delete device" message={`Delete device ${confirmDelete.fingerprint.slice(0, 18)}…?`} busy={deleting} onConfirm={remove} onClose={() => setConfirmDelete(null)} />}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <StatCard label="Total Devices" value={String(data!.length)} change="+18.7%" icon={Monitor} color="bg-blue-50 text-blue-600" positive />
         <StatCard label="Active Devices" value={String(active)} change="+9.3%" icon={CircleCheck} color="bg-emerald-50 text-emerald-600" positive />
@@ -900,7 +968,7 @@ function Devices() {
                       <button className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50" onClick={() => act(d.id, d.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED')}>
                         {d.status === 'BLOCKED' ? 'Unblock' : 'Block'}
                       </button>
-                      <button title="Delete device" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => remove(d.id, d.fingerprint)}>Delete</button>
+                      <button title="Delete device" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => setConfirmDelete(d)}>Delete</button>
                     </div>
                   </td>
                 </tr>
