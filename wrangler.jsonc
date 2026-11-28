@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "license-management-api",
+  "main": "worker.js",
+  "compatibility_date": "2025-03-01",
+  "compatibility_flags": ["nodejs_compat", "nodejs_compat_populate_process_env"],
+  "upload_source_maps": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "NODE_ENV": "production"
+  },
+  "alias": {
+    "class-validator": "./worker-stubs/empty.js",
+    "class-transformer": "./worker-stubs/empty.js",
+    "@nestjs/microservices": "./worker-stubs/empty.js",
+    "@nestjs/microservices/microservices-module.js": "./worker-stubs/empty.js",
+    "@nestjs/websockets/socket-module.js": "./worker-stubs/empty.js"
+  },
+  "assets": {
+    "directory": "packages/api/public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  }
+}

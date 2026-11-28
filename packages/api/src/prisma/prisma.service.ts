@@ -1,16 +1,14 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { createPool } from './database';
+import { createAdapter } from './database.worker';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    // Pure-JS pg driver adapter: works in Wasmer Edge's WebAssembly Node runtime
-    // (no native Prisma query engine binary required).
-    super({ adapter: new PrismaPg(createPool()), log: ['error', 'warn'] });
+    // Neon's HTTP driver on Workers, pure-JS pg adapter elsewhere.
+    super({ adapter: createAdapter(), log: ['error', 'warn'] });
   }
 
   async onModuleInit() {
