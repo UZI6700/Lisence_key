@@ -302,6 +302,98 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
   )
 }
 
+// Renew modal — adjustable days + custom absolute expiry
+function RenewModal({ license, onClose, onRenewed }: { license: any; onClose: () => void; onRenewed: () => void }) {
+  const [mode, setMode] = useState<'days' | 'custom'>('days')
+  const [days, setDays] = useState(30)
+  const [customExpiry, setCustomExpiry] = useState('')
+  const [maxDevices, setMaxDevices] = useState<number>(license?.maxDevices ?? 1)
+  const [status, setStatus] = useState('ACTIVE')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const body: any = { maxDevices: Number(maxDevices), status }
+      if (mode === 'custom') {
+        if (!customExpiry) throw new Error('Choose a custom expiry date')
+        body.expiresAt = new Date(customExpiry).toISOString()
+      } else {
+        body.days = Math.max(1, Number(days) || 30)
+      }
+      await licensesApi.renew(license.id, body)
+      onRenewed()
+    } catch (err: any) {
+      setError(err.message || 'Failed to renew license')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Default custom input to current expiry + 30 days
+  useEffect(() => {
+    const base = license?.expiresAt ? new Date(license.expiresAt) : new Date()
+    base.setDate(base.getDate() + 30)
+    setCustomExpiry(base.toISOString().slice(0, 16))
+  }, [license])
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="card w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <div><h3 className="font-semibold text-slate-900">Renew License</h3><p className="text-xs text-slate-500 mt-0.5 font-mono">{license?.licenseKey}</p></div>
+          <button className="text-slate-400 hover:text-slate-700" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <button className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border ${mode === 'days' ? 'bg-primary-50 text-primary-700 border-primary-200' : 'bg-white text-slate-600 border-slate-200'}`} onClick={() => setMode('days')}>Extend by days</button>
+            <button className={`flex-1 px-3 py-2 text-xs font-medium rounded-lg border ${mode === 'custom' ? 'bg-primary-50 text-primary-700 border-primary-200' : 'bg-white text-slate-600 border-slate-200'}`} onClick={() => setMode('custom')}>Custom expiry</button>
+          </div>
+
+          {mode === 'days' ? (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">Number of days to add</label>
+              <input className="input-field w-full" type="number" min={1} value={days} onChange={e => setDays(Number(e.target.value))} />
+              <p className="text-[11px] text-slate-400 mt-1">Current expiry: {fmtDate(license?.expiresAt)} — extended from the later of expiry or today</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">New expiry date & time</label>
+              <input className="input-field w-full" type="datetime-local" value={customExpiry} onChange={e => setCustomExpiry(e.target.value)} />
+              <p className="text-[11px] text-slate-400 mt-1">Sets an absolute expiry; must be in the future</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">Max devices</label>
+              <input className="input-field w-full" type="number" min={1} value={maxDevices} onChange={e => setMaxDevices(Number(e.target.value))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1.5">Status</label>
+              <select className="input-field w-full" value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="ACTIVE">Active</option>
+                <option value="PENDING">Pending</option>
+              </select>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button className="btn-secondary" onClick={onClose}>Cancel</button>
+            <button className="btn-primary flex items-center gap-2" onClick={submit} disabled={busy}>
+              {busy ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              {busy ? 'Renewing…' : 'Renew'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------
 // Dashboard
 // ------------------------------------------------------------------
@@ -417,6 +509,7 @@ function Licenses() {
   const [filter, setFilter] = useState('All')
   const [page, setPage] = useState(1)
   const [showIssue, setShowIssue] = useState(false)
+  const [renewLicense, setRenewLicense] = useState<any>(null)
   const [notice, setNotice] = useState('')
   const [copied, setCopied] = useState('')
 
@@ -443,6 +536,7 @@ function Licenses() {
 
       {notice && <div className="card p-3 text-sm text-red-600 bg-red-50 border-red-100">{notice}</div>}
       {showIssue && <IssueModal onClose={() => setShowIssue(false)} onIssued={() => { setShowIssue(false); reload() }} />}
+      {renewLicense && <RenewModal license={renewLicense} onClose={() => setRenewLicense(null)} onRenewed={() => { setRenewLicense(null); reload() }} />}
 
       <div className="card overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row gap-3">
@@ -482,7 +576,7 @@ function Licenses() {
                         {l.status !== 'REVOKED' && (
                           <button title="Revoke" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200" onClick={() => act(() => licensesApi.revoke(l.id))}>Revoke</button>
                         )}
-                        <button title="Renew 30 days" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200" onClick={() => act(() => licensesApi.renew(l.id, 30))}>Renew</button>
+                        <button title="Renew license" className="text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200" onClick={() => setRenewLicense(l)}>Renew</button>
                       </div>
                     </td>
                   </tr>

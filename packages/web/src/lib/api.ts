@@ -103,7 +103,8 @@ export const licensesApi = {
   validate: (body: any) => api.post<any>('/licenses/validate', body),
   activate: (body: any) => api.post<any>('/licenses/activate', body),
   revoke: (id: string) => api.post<any>(`/licenses/${id}/revoke`),
-  renew: (id: string, days: number) => api.post<any>(`/licenses/${id}/renew`, { days }),
+  renew: (id: string, body: { days?: number; expiresAt?: string; maxDevices?: number; status?: string } = { days: 30 }) =>
+    api.post<any>(`/licenses/${id}/renew`, body),
   transferDevice: (id: string, fingerprint: string) => api.post<any>(`/offline/transfer/${id}`, { fingerprint }),
   remove: (id: string) => api.delete<any>(`/licenses/${id}`),
 }

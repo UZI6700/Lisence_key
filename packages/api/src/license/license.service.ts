@@ -367,20 +367,47 @@ export class LicenseService {
     return this.serialize(updated);
   }
 
-  async renew(id: string, days: number) {
+  async renew(
+    id: string,
+    dto: {
+      days?: number;
+      expiresAt?: string;
+      maxDevices?: number;
+      status?: string;
+    } = {},
+  ) {
     const license = await this.prisma.license.findUnique({ where: { id } });
     if (!license) throw new NotFoundException('License not found');
+
     const previousExpiry = license.expiresAt > new Date() ? license.expiresAt : new Date();
-    const newExpiry = new Date(previousExpiry.getTime() + Math.max(1, days) * DAY);
+
+    // Custom absolute expiry wins; otherwise extend from the active expiry by N days.
+    let newExpiry: Date;
+    if (dto.expiresAt && Number.isFinite(Date.parse(dto.expiresAt))) {
+      newExpiry = new Date(dto.expiresAt);
+    } else {
+      const days = Math.max(1, Math.floor(Number(dto.days) || 30));
+      newExpiry = new Date(previousExpiry.getTime() + days * DAY);
+    }
+
+    // Ensure the new expiry is in the future.
+    if (newExpiry.getTime() <= Date.now()) {
+      throw new BadRequestException('New expiry must be in the future');
+    }
+
+    const durationDays = Math.max(1, Math.ceil((newExpiry.getTime() - Date.now()) / DAY));
+
     await this.prisma.licenseRenewal.create({
       data: { licenseId: id, previousExpiry, newExpiry, renewalType: 'MANUAL' },
     });
+
     const updated = await this.prisma.license.update({
       where: { id },
       data: {
         expiresAt: newExpiry,
-        durationDays: Math.max(1, days),
-        status: 'ACTIVE',
+        durationDays,
+        status: dto.status || 'ACTIVE',
+        ...(dto.maxDevices && Number(dto.maxDevices) > 0 ? { maxDevices: Math.floor(Number(dto.maxDevices)) } : {}),
         isInGracePeriod: false,
         gracePeriodEnd: null,
       },

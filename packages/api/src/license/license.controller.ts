@@ -51,8 +51,8 @@ export class LicenseController {
   }
 
   @Post(':id/renew')
-  renew(@Param('id') id: string, @Body('days') days: number) {
-    return this.licenseService.renew(id, Number(days) || 365);
+  renew(@Param('id') id: string, @Body() body: any) {
+    return this.licenseService.renew(id, body || {});
   }
 
   @Patch(':id')
