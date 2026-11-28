@@ -3,6 +3,8 @@ dist/
 api/.index.bundle.cjs
 api/index.js
 api/node_modules/
+worker-dist/
+worker-bundle.mjs
 .env
 .env.*
 !.env.example
